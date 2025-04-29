@@ -35,5 +35,3 @@ This project aims to detect health insurance fraud using machine learning techni
 3. Run notebooks step-by-step.
 
 ---
-
-Author: Your Name
