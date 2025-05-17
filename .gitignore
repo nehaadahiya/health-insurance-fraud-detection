@@ -1,0 +1,5 @@
+data/*.csv
+db/*.db
+output/
+*.sqlite
+*.log
