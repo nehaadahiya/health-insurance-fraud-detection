@@ -3,3 +3,4 @@ db/*.db
 output/
 *.sqlite
 *.log
+models/*.pkl
