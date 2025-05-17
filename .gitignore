@@ -4,3 +4,4 @@ output/
 *.sqlite
 *.log
 models/*.pkl
+bfg.jar
