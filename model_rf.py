@@ -9,7 +9,7 @@ import joblib
 
 def main():
     # Load dataset
-    df = pd.read_csv("data/model_ready.csv")
+    df = pd.read_csv("data/model_ready.csv", on_bad_lines='skip', low_memory=False)
     X = df.drop(columns=['PotentialFraud'])
     y = df['PotentialFraud'].astype('category').cat.codes
 
