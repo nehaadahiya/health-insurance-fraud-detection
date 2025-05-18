@@ -28,7 +28,7 @@ def preprocess_data():
     X_scaled = scaler.fit_transform(X)
     return X_scaled, y
 
-def optimize_model(X, y):
+def optimize_model(X_res, y_res):
     def objective(trial):
         rf = RandomForestClassifier(
             n_estimators=trial.suggest_int("n_estimators", 200, 400),
@@ -38,8 +38,6 @@ def optimize_model(X, y):
             n_jobs=-1
         )
         skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-        smt = SMOTETomek(random_state=42)
-        X_res, y_res = smt.fit_resample(X, y)
         scores = cross_val_score(rf, X_res, y_res, cv=skf, scoring='f1_weighted')
         return np.mean(scores)
 
@@ -47,10 +45,7 @@ def optimize_model(X, y):
     study.optimize(objective, n_trials=10)
     return study.best_params
 
-def train_final_model(X, y, best_rf_params):
-    smt = SMOTETomek(random_state=42)
-    X_res, y_res = smt.fit_resample(X, y)
-
+def train_final_model(X_res, y_res, best_rf_params):
     X_train, X_test, y_train, y_test = train_test_split(
         X_res, y_res, test_size=0.2, stratify=y_res, random_state=42
     )
@@ -85,7 +80,6 @@ def train_final_model(X, y, best_rf_params):
     specificity = confusion_matrix(y_test, y_pred)[0, 0] / sum(confusion_matrix(y_test, y_pred)[0])
     print(f"🧠 Specificity: {specificity:.4f}")
 
-    # Save confusion matrix and ROC plot
     os.makedirs("outputs", exist_ok=True)
 
     plt.figure(figsize=(6, 5))
@@ -113,12 +107,16 @@ def main():
     print("📥 Loading and preprocessing data...")
     X, y = preprocess_data()
 
+    print("\n🔄 Applying SMOTETomek for resampling...")
+    smt = SMOTETomek(random_state=42)
+    X_res, y_res = smt.fit_resample(X, y)
+
     print("\n🔍 Hyperparameter tuning using Optuna...")
-    best_rf_params = optimize_model(X, y)
+    best_rf_params = optimize_model(X_res, y_res)
     print(f"✅ Best Random Forest params: {best_rf_params}")
 
-    print("\n🎯 Training final model with stacking and SMOTETomek...")
-    train_final_model(X, y, best_rf_params)
+    print("\n🎯 Training final model with stacking and resampled data...")
+    train_final_model(X_res, y_res, best_rf_params)
 
 if __name__ == "__main__":
     main()
