@@ -1,20 +1,20 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import time, os, joblib
+
+from sklearn.model_selection import train_test_split, StratifiedKFold, RandomizedSearchCV
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier, StackingClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+from sklearn.inspection import permutation_importance
 from imblearn.combine import SMOTETomek
-import joblib
-import optuna
-import os
-import time
-import numpy as np
 
+# === STEP 1: Load & Preprocess Data ===
 def preprocess_data():
     df = pd.read_csv("data/model_ready.csv", on_bad_lines='skip', low_memory=False)
     drop_cols = ['BeneID', 'ClaimID', 'Provider']
@@ -26,97 +26,152 @@ def preprocess_data():
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    return X_scaled, y
+    return X_scaled, y, X.columns
 
-def optimize_model(X_res, y_res):
-    def objective(trial):
-        rf = RandomForestClassifier(
-            n_estimators=trial.suggest_int("n_estimators", 200, 400),
-            max_depth=trial.suggest_int("max_depth", 10, 30),
-            class_weight='balanced',
-            random_state=42,
-            n_jobs=-1
-        )
-        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-        scores = cross_val_score(rf, X_res, y_res, cv=skf, scoring='f1_weighted')
-        return np.mean(scores)
+# === STEP 2: Resample using SMOTETomek ===
+def resample_data(X, y):
+    print("🌀 Applying SMOTETomek...")
+    smt = SMOTETomek(random_state=42)
+    return smt.fit_resample(X, y)
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=10)
-    return study.best_params
+# === STEP 3: Hyperparameter Tuning with StratifiedKFold ===
+def tune_random_forest(X_train, y_train):
+    print("⚙️ Tuning Random Forest hyperparameters with StratifiedKFold...")
+    rf = RandomForestClassifier(class_weight='balanced', random_state=42, n_jobs=-1)
 
-def train_final_model(X_res, y_res, best_rf_params):
+    param_dist = {
+        'n_estimators': [100, 200, 300, 400],
+        'max_depth': [15, 20, 25, 30, None],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4],
+        'max_features': ['sqrt', 'log2', None]
+    }
+
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+    random_search = RandomizedSearchCV(
+        rf,
+        param_distributions=param_dist,
+        n_iter=50,
+        scoring='roc_auc',
+        cv=skf,
+        verbose=2,
+        n_jobs=-1,
+        random_state=42
+    )
+
+    random_search.fit(X_train, y_train)
+    print(f"Best RF Params: {random_search.best_params_}")
+    return random_search.best_estimator_
+
+# === STEP 4: Feature Selection ===
+def select_features(X_train, y_train, model, feature_names, top_n=25):
+    print("📊 Running Permutation Feature Importance...")
+    results = permutation_importance(model, X_train, y_train, n_repeats=10, random_state=42, n_jobs=-1)
+    importances = pd.DataFrame({
+        'feature': feature_names,
+        'importance': results.importances_mean
+    }).sort_values(by='importance', ascending=False)
+    top_features = importances.head(top_n)['feature'].values
+    plot_top_features(importances.head(top_n))
+    return top_features
+
+def plot_top_features(df):
+    os.makedirs("outputs", exist_ok=True)
+    plt.figure(figsize=(10, 6))
+    sns.barplot(y='feature', x='importance', data=df, palette='viridis')
+    plt.title("Top Permutation Feature Importances")
+    plt.tight_layout()
+    plt.savefig("outputs/top_feature_importance.png")
+    plt.close()
+
+# === STEP 5: Train & Evaluate Ensemble with Stacking ===
+def train_and_evaluate(X, y, feature_names):
+    X_res, y_res = resample_data(X, y)
+
     X_train, X_test, y_train, y_test = train_test_split(
         X_res, y_res, test_size=0.2, stratify=y_res, random_state=42
     )
 
-    rf = RandomForestClassifier(**best_rf_params, class_weight='balanced', random_state=42, n_jobs=-1)
-    xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss',
-                        learning_rate=0.05, max_depth=8, n_estimators=300, subsample=0.8,
-                        colsample_bytree=0.8, scale_pos_weight=1, random_state=42)
-    lgbm = LGBMClassifier(n_estimators=300, max_depth=10, learning_rate=0.05,
-                          subsample=0.8, class_weight='balanced', random_state=42)
+    # Tune Random Forest base model with StratifiedKFold
+    rf_best = tune_random_forest(X_train, y_train)
 
-    ensemble = StackingClassifier(
-        estimators=[('rf', rf), ('xgb', xgb), ('lgbm', lgbm)],
-        final_estimator=LogisticRegression(max_iter=1000),
-        cv=5,
-        n_jobs=-1,
-        passthrough=True
+    # Select top features based on permutation importance of tuned RF
+    top_features = select_features(X_train, y_train, rf_best, feature_names)
+    top_idx = [list(feature_names).index(f) for f in top_features]
+
+    X_train_sel = X_train[:, top_idx]
+    X_test_sel = X_test[:, top_idx]
+
+    # Define models for ensemble
+    xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+    lgbm = LGBMClassifier(class_weight='balanced', random_state=42)
+
+    voting_clf = VotingClassifier(
+        estimators=[('rf', rf_best), ('xgb', xgb), ('lgbm', lgbm)],
+        voting='soft',
+        n_jobs=-1
     )
 
-    print("🚀 Training ensemble model...")
+    stack = StackingClassifier(
+        estimators=[('voting', voting_clf)],
+        final_estimator=LogisticRegression(),
+        passthrough=True,
+        n_jobs=-1
+    )
+
+    print("🚀 Training stacked model...")
     start = time.time()
-    ensemble.fit(X_train, y_train)
-    print(f"✅ Training completed in {(time.time() - start) / 60:.2f} minutes")
+    stack.fit(X_train_sel, y_train)
+    print(f"✅ Training completed in {(time.time() - start) / 60:.2f} mins")
 
-    joblib.dump(ensemble, "models/ensemble_model.pkl")
+    os.makedirs("models", exist_ok=True)
+    joblib.dump(stack, "models/stacked_model.pkl")
 
-    y_probs = ensemble.predict_proba(X_test)[:, 1]
-    y_pred = (y_probs >= 0.45).astype(int)
+    y_probs = stack.predict_proba(X_test_sel)[:, 1]
 
+    # Custom threshold to push recall higher (you can tune this!)
+    threshold = 0.40
+    y_pred = (y_probs >= threshold).astype(int)
+
+    # === Evaluation ===
     print("\n📊 Classification Report:\n", classification_report(y_test, y_pred))
     print(f"🔍 ROC AUC Score: {roc_auc_score(y_test, y_probs):.4f}")
-    specificity = confusion_matrix(y_test, y_pred)[0, 0] / sum(confusion_matrix(y_test, y_pred)[0])
+
+    cm = confusion_matrix(y_test, y_pred)
+    specificity = cm[0, 0] / sum(cm[0])
     print(f"🧠 Specificity: {specificity:.4f}")
 
-    os.makedirs("outputs", exist_ok=True)
-
+    # === Plot Confusion Matrix ===
     plt.figure(figsize=(6, 5))
-    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='YlGnBu')
-    plt.title("Optimized Ensemble - Confusion Matrix")
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title("Confusion Matrix")
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
     plt.tight_layout()
-    plt.savefig("outputs/optimized_confusion_matrix.png")
-    plt.show()
+    plt.savefig("outputs/stacked_confusion_matrix.png")
+    plt.close()
 
+    # === Plot ROC Curve ===
     fpr, tpr, _ = roc_curve(y_test, y_probs)
     plt.figure(figsize=(6, 5))
     plt.plot(fpr, tpr, label=f"AUC = {roc_auc_score(y_test, y_probs):.4f}")
     plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
-    plt.title("Optimized Ensemble - ROC Curve")
+    plt.title("ROC Curve")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.legend()
     plt.tight_layout()
-    plt.savefig("outputs/optimized_roc_curve.png")
-    plt.show()
+    plt.savefig("outputs/stacked_roc_curve.png")
+    plt.close()
 
+# === MAIN ===
 def main():
-    print("📥 Loading and preprocessing data...")
-    X, y = preprocess_data()
+    print("📥 Loading data...")
+    X, y, feature_names = preprocess_data()
 
-    print("\n🔄 Applying SMOTETomek for resampling...")
-    smt = SMOTETomek(random_state=42)
-    X_res, y_res = smt.fit_resample(X, y)
-
-    print("\n🔍 Hyperparameter tuning using Optuna...")
-    best_rf_params = optimize_model(X_res, y_res)
-    print(f"✅ Best Random Forest params: {best_rf_params}")
-
-    print("\n🎯 Training final model with stacking and resampled data...")
-    train_final_model(X_res, y_res, best_rf_params)
+    print("⚙️ Training and evaluating model...")
+    train_and_evaluate(X, y, feature_names)
 
 if __name__ == "__main__":
     main()
