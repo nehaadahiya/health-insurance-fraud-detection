@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.impute import SimpleImputer
 from imblearn.over_sampling import SMOTE
 from sklearn.metrics import classification_report, roc_auc_score, roc_curve, confusion_matrix
-
+from sklearn.utils.multiclass import unique_labels
 
 def load_data(path="data/model_ready.csv"):
     print("Loading data...")
@@ -123,32 +123,43 @@ def evaluate_model(model, X_test, y_test):
 
     y_test_numeric = y_test.map({'No': 0, 'Yes': 1})
     print("\n[RESULT] Classification Report:\n", classification_report(y_test_numeric, y_pred))
-    auc = roc_auc_score(y_test, y_prob)
+    auc = roc_auc_score(y_test_numeric, y_prob)
     print(f"[RESULT] ROC AUC Score: {auc:.4f}")
 
-    cm = confusion_matrix(y_test_numeric, y_pred)
+    # Ensure all 4 matrix values show
+    cm = confusion_matrix(y_test_numeric, y_pred, labels=[0, 1])
+    cm_labels = ["TN", "FP", "FN", "TP"]
     plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='coolwarm')
-    plt.title("Confusion Matrix - Ensemble Model")
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
+    ax = sns.heatmap(cm, annot=False, fmt='d', cmap='coolwarm', xticklabels=['No Fraud', 'Fraud'], yticklabels=['No Fraud', 'Fraud'])
+    plt.title("Confusion Matrix - Isolation Forest")
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+
+    # Custom annotation with labels (TN, FP, etc.)
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            count = cm[i, j]
+            label = cm_labels[i][j]
+            ax.text(j + 0.5, i + 0.5, f"{count}\n({label})", ha='center', va='center', color='black', fontsize=10)
+
     plt.tight_layout()
     plt.savefig("outputs/confusion_matrix.png")
     plt.close()
-    print("Saved confusion matrix.")
+    print("Saved cleaned confusion matrix.")
+
 
     fpr, tpr, _ = roc_curve(y_test_numeric, y_prob)
     plt.figure(figsize=(6, 5))
     plt.plot(fpr, tpr, label=f"AUC = {auc:.4f}")
     plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
-    plt.title("ROC Curve - Ensemble Model")
+    plt.title("ROC Curve - Isolation Forest")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.legend()
     plt.tight_layout()
     plt.savefig("outputs/roc_curve.png")
     plt.close()
-    print(" Saved ROC curve.")
+    print("Saved ROC curve.")
 
 
 def plot_feature_importance(model, feature_names):

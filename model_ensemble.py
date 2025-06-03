@@ -195,10 +195,16 @@ def train_and_evaluate(X, y, feature_names):
     plot_feature_importance(rf_best, feature_names)
 
     top_features = select_features(X_train, y_train, rf_best, feature_names)
-    top_idx = [list(feature_names).index(f) for f in top_features]
 
+    # ✅ Save top 25 features for hybrid use
+    import joblib
+    joblib.dump(top_features, "models/top_25_features.pkl")
+    print("📦 Saved top 25 features to models/top_25_features.pkl")
+
+    top_idx = [list(feature_names).index(f) for f in top_features]
     X_train_sel = X_train[:, top_idx]
     X_test_sel = X_test[:, top_idx]
+
 
     # Ensemble models
     xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
@@ -233,17 +239,42 @@ def train_and_evaluate(X, y, feature_names):
     print("\n📊 Classification Report:\n", classification_report(y_test, y_pred))
     print(f"🔍 ROC AUC Score: {roc_auc_score(y_test, y_probs):.4f}")
 
-    cm = confusion_matrix(y_test, y_pred)
-    specificity = cm[0, 0] / sum(cm[0])
-    print(f"🧠 Specificity: {specificity:.4f}")
+    print("\n📊 Classification Report:\n", classification_report(y_test, y_pred))
 
-    plot_confusion_matrix(cm)
-    plot_roc_curve(y_test, y_probs)
+   # === Plot Clean Confusion Matrix with Custom Labels ===
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(6, 5))
+
+    # Use a soft pastel colormap and black text
+    sns.heatmap(cm, fmt='d', cmap='BuGn', cbar=False,
+                xticklabels=['Not Fraud', 'Fraud'],
+                yticklabels=['Not Fraud', 'Fraud'])
+
+    plt.title("🧾 Confusion Matrix (Threshold = 0.40)")
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+
+    # Custom readable black labels
+    labels = np.asarray([
+        [f"TN = {cm[0,0]}", f"FP = {cm[0,1]}"],
+        [f"FN = {cm[1,0]}", f"TP = {cm[1,1]}"]
+    ])
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            plt.text(j + 0.5, i + 0.5, labels[i, j],
+                    ha="center", va="center",
+                    color="black", fontsize=10, fontweight="bold")
+
+    plt.tight_layout()
+    plt.savefig("outputs/confusion_matrix_ensemble.png")
+    plt.close()
+    print("🖼️ Clean confusion matrix saved to outputs/confusion_matrix_ensemble.png")
+
 
 def plot_confusion_matrix(cm):
     os.makedirs("outputs", exist_ok=True)
     plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Pastel1')
     plt.title("Confusion Matrix")
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
