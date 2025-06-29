@@ -1,5 +1,7 @@
 # Health Insurance Fraud Detection 🚨
 
+![header](/outputs/2.png)
+
 ## Project Story
 
 Health insurance fraud isn’t just a line item loss — it’s a silent heist that affects millions. This project aims to detect fraudulent claims using advanced machine learning techniques and anomaly detection methods. By analyzing patterns and catching outliers, we help insurers identify suspicious activities before they drain resources.
