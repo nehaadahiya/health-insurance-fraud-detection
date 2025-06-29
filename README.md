@@ -92,17 +92,17 @@ streamlit run scripts/streamlit_app.py
 
 ### Screenshots
 
-#### Model Performance Overview
+#### Model (isolation forest) Performance Overview
 
-![Performance Screenshot](/outputs/streamlit_perf_overview.png)
+![Performance Screenshot](/outputs/isolation dashboard.png)
 
 #### Feature Importance
 
-![Feature Importance Screenshot](/outputs/streamlit_feature_importance.png)
+![Feature Importance Screenshot](/outputs/top_feature_importance_rf.png)
 
-#### Fraud Probability Distribution
+#### Fraud Probability(supervised model) Distribution
 
-![Probability Screenshot](/outputs/streamlit_probability_dist.png)
+![Probability Screenshot](/outputs/supervised dashboard.png)
 
 ### App Features
 
