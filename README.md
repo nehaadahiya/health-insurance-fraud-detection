@@ -94,7 +94,9 @@ streamlit run scripts/streamlit_app.py
 
 #### Model (isolation forest) Performance Overview
 
-![Performance Screenshot](/outputs/isolation dashboard.png)
+![Performance Screenshot](/outputs
+/isolation dashboard.png
+)
 
 #### Feature Importance
 
