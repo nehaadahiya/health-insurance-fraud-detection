@@ -25,35 +25,36 @@ This project focuses on identifying fraudulent insurance claims using both super
 
 ## Dataset Information
 
-* **Source**: Multiple health claim datasets (India-based)
-* **Segments**:
+- **Source**: Multiple health claim datasets (India-based)
+- **Segments**:
 
-  * Generic treatment and costing data
-  * Patient-specific treatment and claim history
-  * Insurance claim data including fraud labels
-* **Goal**: Detect anomalies and classify potential frauds
+  - Generic treatment and costing data
+  - Patient-specific treatment and claim history
+  - Insurance claim data including fraud labels
+
+- **Goal**: Detect anomalies and classify potential frauds
 
 ## Approach & Models
 
-* **Supervised Models**:
+- **Supervised Models**:
 
-  * Logistic Regression
-  * Random Forest
-  * XGBoost
-  * LightGBM
-  * Ensemble VotingClassifier
+  - Logistic Regression
+  - Random Forest
+  - XGBoost
+  - LightGBM
+  - Ensemble VotingClassifier
 
-* **Unsupervised / Anomaly Detection**:
+- **Unsupervised / Anomaly Detection**:
 
-  * Isolation Forest
-  * One-Class SVM
+  - Isolation Forest
+  - One-Class SVM
 
-* **Techniques Used**:
+- **Techniques Used**:
 
-  * SMOTE for class imbalance
-  * Feature selection via SelectFromModel
-  * Hyperparameter tuning (RandomizedSearchCV)
-  * Performance metrics: Accuracy, Precision, Recall, F1, AUC
+  - SMOTE for class imbalance
+  - Feature selection via SelectFromModel
+  - Hyperparameter tuning (RandomizedSearchCV)
+  - Performance metrics: Accuracy, Precision, Recall, F1, AUC
 
 ## Installation & Setup
 
@@ -94,9 +95,7 @@ streamlit run scripts/streamlit_app.py
 
 #### Model (isolation forest) Performance Overview
 
-![Performance Screenshot](/outputs
-/isolation dashboard.png
-)
+![Performance Screenshot](/outputs/isolation%20dashboard.png)
 
 #### Feature Importance
 
@@ -104,20 +103,20 @@ streamlit run scripts/streamlit_app.py
 
 #### Fraud Probability(supervised model) Distribution
 
-![Probability Screenshot](/outputs/supervised dashboard.png)
+![Probability Screenshot](/outputs/supervised%20dashboard.png)
 
 ### App Features
 
-* Upload new claim datasets and check predictions
-* Visualize fraud probability and key metrics
-* Explore feature importance and decision thresholds interactively
+- Upload new claim datasets and check predictions
+- Visualize fraud probability and key metrics
+- Explore feature importance and decision thresholds interactively
 
 ## Future Improvements
 
-* Integrate real-time claim processing pipeline
-* Add Power BI visualization for executive-level summaries
-* Incorporate more advanced explainability modules (e.g., SHAP)
-* Expand to multi-country datasets for broader fraud scenarios
+- Integrate real-time claim processing pipeline
+- Add Power BI visualization for executive-level summaries
+- Incorporate more advanced explainability modules (e.g., SHAP)
+- Expand to multi-country datasets for broader fraud scenarios
 
 ## Contact
 
